@@ -31,7 +31,7 @@ db = PyDB(os.getenv("DB_CONNECTIONSTR"))
     name='assignChannel', 
     category="main features",
     help='assignChannel <textChannel> \n......Use this command to tell me where '
-        'to report in this server.')
+        'to report in this server. Only admins can use this command.')
 async def getPlayers(ctx:commands.Context, channel:discord.TextChannel):
     author:discord.Member = ctx.author
     if author.guild_permissions.administrator:
@@ -53,8 +53,54 @@ async def getPlayers(ctx:commands.Context, channel:discord.TextChannel):
         await ctx.send("Only server administrators can assign me a channel.")
 
 @bot.command(
+    name="assignRole",
+    help="assignRole [<roleTag>]\n......Use this command to restric those who can add "
+        "players for me to follow. If no roleTag is specified, then anyone can addPlayers"
+)
+async def assignRole(ctx:commands.Context, role:discord.Role = None):
+    author:discord.Member = ctx.author
+    g:discord.Guild = ctx.guild
+    guildID = ctx.guild.id
+    if author.guild_permissions.administrator:
+        serverCol = db.db.get_collection(Server.collection)
+        server = serverCol.find_one({"serverId":guildID})
+        if not server:
+            await ctx.send("I need a text channel to report on before getting a role assigned. Use the command as follows and then try this command aggain:")
+            await sendHelp(ctx, cmd="assignChannel")
+            return
+        if role is None:
+            serverCol.update_one(
+                {"serverId":guildID},
+                {"$unset":{"adminRole":""}}
+            )
+            await ctx.send("Now anyone can add players to the server playerlist.")
+        else:
+            serverCol.update_one(
+                {"serverId":guildID},
+                {"$set":{"adminRole":role.id}}
+            )
+            await ctx.send(f"From now on, only users with the role '{role.name}' can add players to the server playerlist.")            
+    else:
+        await ctx.send("Only server administrators can assign me a role.")
+
+
+@assignRole.error
+async def addPlayer_Error(ctx, error:commands.CommandError):
+    if isinstance(error, commands.RoleNotFound):
+        er:commands.RoleNotFound = error
+        await ctx.send(
+            f"Excuse me... I could find the role '{er.argument}' on the server, perhaps it's an user or something?\n"
+        )
+    else:
+        print(error)
+        await ctx.send(strs.ERROR.format("There was an unexpected error."))
+        raise error
+
+@bot.command(
     name="addPlayer",
-    help='addPlayer <tetr.io username> [<discord mention>]\n......Report activity of this player '
+    help='addPlayer <tetr.io username> '
+        # '[<discord mention>]'
+        '\n......Report activity of this player '
         'in this server. Optionally, you can @somenone to tag them on their activity.'
 )
 async def addPlayer(ctx:commands.Context, tName:str, member:discord.Member = None):
@@ -62,12 +108,22 @@ async def addPlayer(ctx:commands.Context, tName:str, member:discord.Member = Non
     # TODO independtly of if jstris could be added or not, we should add this code to the module
 
     # check if server in db, if it doesnt one must be assigned
-    guildId = ctx.guild.id
+    guild:discord.Guild = ctx.guild
+    guildId = guild.id
     dbRes = db.db.get_collection(Server.collection).find_one({"serverId":guildId})
     if not dbRes:
         await ctx.send("I need to get assigned a channel on this server before you can add players. Tell the admins to use the next command:")
         await sendHelp(ctx, cmd="assignChannel")
         return
+    
+    adminRoleId = dbRes.get("adminRole",None)
+    if adminRoleId is not None:
+        author:discord.Member = ctx.author
+        authorRoles = list(map(lambda x: x.id, author.roles))
+        adminRole:discord.Role = guild.get_role(adminRoleId)
+        if adminRoleId not in authorRoles:
+            await ctx.send(strs.ERROR.format(f"Only people with the role {adminRole.name} can add new players. Please contact someone with that role."))
+            return
 
     # get user and check if it exists
     tName = tName.lower()
@@ -138,7 +194,6 @@ async def addPlayer(ctx:commands.Context, tName:str, member:discord.Member = Non
     )
 
     await ctx.send(f"The player {tName} was added to the server's player list.")
-    pass
 
 @addPlayer.error
 async def addPlayer_Error(ctx, error:commands.CommandError):
@@ -149,7 +204,7 @@ async def addPlayer_Error(ctx, error:commands.CommandError):
         er:commands.MemberNotFound = error
         await ctx.send(
             f"Excuse me... I could find {er.argument} on the server, perhaps it's a role or something?\n"
-            "I'll try to add the player anyways, you could link them afterwards if I succeed."
+            # "I'll try to add the player anyways, you could link them afterwards if I succeed."
         )
     else:
         print(error)
@@ -283,6 +338,8 @@ async def lookForTetrioUpdates():
             mod = TetrioRankModule()
             if os.getenv("DEV"):
                 a = input("Esperando ordenes...")
+                if a == "s":
+                    await asyncio.sleep(3*60)
             else:
                 await asyncio.sleep(10*60)
             c = db.db.get_collection(TetrioPlayer.collection).find()
