@@ -28,7 +28,8 @@ bot = Bot(command_prefix=os.getenv("BOT_PREFIX"))
 db = PyDB(os.getenv("DB_CONNECTIONSTR"))
 
 @bot.command(
-    name='assignChannel', 
+    name='assignChannel',
+    aliases=["assignchannel"],
     category="main features",
     help='assignChannel <textChannel> \n......Use this command to tell me where '
         'to report in this server. Only admins can use this command.')
@@ -54,6 +55,7 @@ async def getPlayers(ctx:commands.Context, channel:discord.TextChannel):
 
 @bot.command(
     name="assignRole",
+    aliases=['assignrole'],
     help="assignRole [<roleTag>]\n......Use this command to restric those who can add "
         "players for me to follow. If no roleTag is specified, then anyone can addPlayers"
 )
@@ -101,7 +103,8 @@ async def addPlayer_Error(ctx, error:commands.CommandError):
     help='addPlayer <tetr.io username> '
         # '[<discord mention>]'
         '\n......Report activity of this player '
-        'in this server. Optionally, you can @somenone to tag them on their activity.'
+        'in this server. Optionally, you can @somenone to tag them on their activity.',
+    aliases=['addplayer']
 )
 async def addPlayer(ctx:commands.Context, tName:str, member:discord.Member = None):
     # BACKLOG adding jstris functionality would require a refactor of the code, encapsulate current behavour in tetrioModule
@@ -213,7 +216,8 @@ async def addPlayer_Error(ctx, error:commands.CommandError):
 
 @bot.command(
     name="showPlayers",
-    help='showPlayers\n......Show a list of the players in this server. '
+    help='showPlayers\n......Show a list of the players in this server. ',
+    aliases=['showplayers']
 )
 async def showPlayers(ctx:commands.Context):
     guild:discord.Guild = ctx.guild
