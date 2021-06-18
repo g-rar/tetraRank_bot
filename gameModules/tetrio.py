@@ -126,7 +126,7 @@ class TetrioRankModule(BaseModule):
         # embed.add_field(name="finesse:", value=f"\t**{finesse}%** (+0.2%)", inline=True)
     
     def _fillEmbedPBBlitz(self, pl: TetrioPlayer, oldPl:TetrioPlayer, record:dict, embed: Embed):
-        oldRecord = oldPl.records.sprint
+        oldRecord = oldPl.records.blitz
         finalscore = record['record']['endcontext']['score']
         oldFinalScore = oldRecord['record']['endcontext']['score']
         embed.add_field(name="Final score: ", value=f"\t__**{finalscore} pts**__ ")
