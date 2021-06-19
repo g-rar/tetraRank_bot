@@ -54,12 +54,13 @@ async def getPlayers(ctx:commands.Context, channel:discord.TextChannel):
         await ctx.send("Only server administrators can assign me a channel.")
 
 @bot.command(
-    name="assignRole",
-    aliases=['assignrole'],
-    help="assignRole [<roleTag>]\n......Use this command to restric those who can add "
-        "players for me to follow. If no roleTag is specified, then anyone can addPlayers"
+    name="addAdminRole",
+    aliases=['addadminrole'],
+    help="addAdminRole <roleTag>\n......Use this command to restric those who can add "
+        "players for me to follow. If there are no admin roles, then anyone can add players "
+        "to the server list."
 )
-async def assignRole(ctx:commands.Context, role:discord.Role = None):
+async def addAdminRole(ctx:commands.Context, role:discord.Role):
     author:discord.Member = ctx.author
     g:discord.Guild = ctx.guild
     guildID = ctx.guild.id
@@ -70,24 +71,61 @@ async def assignRole(ctx:commands.Context, role:discord.Role = None):
             await ctx.send("I need a text channel to report on before getting a role assigned. Use the command as follows and then try this command aggain:")
             await sendHelp(ctx, cmd="assignChannel")
             return
-        if role is None:
-            serverCol.update_one(
-                {"serverId":guildID},
-                {"$unset":{"adminRole":""}}
-            )
-            await ctx.send("Now anyone can add players to the server playerlist.")
         else:
             serverCol.update_one(
                 {"serverId":guildID},
-                {"$set":{"adminRole":role.id}}
+                {"$addToSet":{"adminRoles":role.id}}
             )
-            await ctx.send(f"From now on, only users with the role '{role.name}' can add players to the server playerlist.")            
+            await ctx.send(f"From now on, users with the role '{role.name}' can add players to the server playerlist.")            
     else:
         await ctx.send("Only server administrators can assign me a role.")
 
 
-@assignRole.error
-async def addPlayer_Error(ctx, error:commands.CommandError):
+@addAdminRole.error
+async def addAdminRole_Error(ctx, error:commands.CommandError):
+    if isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send("What role did you want to add again? Repeat the command as follows ->")
+        await sendHelp(ctx, "addAdminRole")
+    elif isinstance(error, commands.RoleNotFound):
+        er:commands.RoleNotFound = error
+        await ctx.send(
+            f"Excuse me... I could find the role '{er.argument}' on the server, perhaps it's an user or something?\n"
+        )
+    else:
+        print(error)
+        await ctx.send(strs.ERROR.format("There was an unexpected error."))
+        raise error
+
+
+@bot.command(
+    name="removeAdminRole",
+    aliases=['removeadminrole'],
+    help="removeAdminRole [<roleTag>]\n......Use this command to remove a role who "
+        "will no longer be able to add players to the server's list."
+)
+async def removeAdminRole(ctx:commands.Context, role:discord.Role = None):
+    author:discord.Member = ctx.author
+    g:discord.Guild = ctx.guild
+    guildID = ctx.guild.id
+    if author.guild_permissions.administrator:
+        serverCol = db.db.get_collection(Server.collection)
+        server = serverCol.find_one({"serverId":guildID})
+        if not server:
+            await ctx.send("I need a text channel to report on before managing roles. Use the command as follows and then try this command aggain:")
+            await sendHelp(ctx, cmd="assignChannel")
+            return
+        else:
+            serverCol.update_one(
+                {"serverId":guildID},
+                {"$pull":{"adminRoles":role.id}}
+            )
+            await ctx.send(f"From now on, users with the role '{role.name}' will no longer be able to add players to the server playerlist.")            
+    else:
+        await ctx.send("Only server administrators can remove a role.")
+
+
+@removeAdminRole.error
+async def removeAdminRole_Error(ctx, error:commands.CommandError):
     if isinstance(error, commands.RoleNotFound):
         er:commands.RoleNotFound = error
         await ctx.send(
@@ -98,17 +136,19 @@ async def addPlayer_Error(ctx, error:commands.CommandError):
         await ctx.send(strs.ERROR.format("There was an unexpected error."))
         raise error
 
+
 @bot.command(
     name="addPlayer",
     help='addPlayer <tetr.io username> '
         # '[<discord mention>]'
         '\n......Report activity of this player '
-        'in this server. Optionally, you can @somenone to tag them on their activity.',
+        'in this server.', #Optionally, you can @somenone to tag them on their activity.',
     aliases=['addplayer']
 )
 async def addPlayer(ctx:commands.Context, tName:str, member:discord.Member = None):
     # BACKLOG adding jstris functionality would require a refactor of the code, encapsulate current behavour in tetrioModule
     # TODO independtly of if jstris could be added or not, we should add this code to the module
+    # BACKLOG adding support for discord mentions
 
     # check if server in db, if it doesnt one must be assigned
     guild:discord.Guild = ctx.guild
@@ -119,13 +159,13 @@ async def addPlayer(ctx:commands.Context, tName:str, member:discord.Member = Non
         await sendHelp(ctx, cmd="assignChannel")
         return
     
-    adminRoleId = dbRes.get("adminRole",None)
-    if adminRoleId is not None:
+    adminRoleIds = dbRes.get("adminRoles",[])
+    if len(adminRoleIds) != 0:
         author:discord.Member = ctx.author
         authorRoles = list(map(lambda x: x.id, author.roles))
-        adminRole:discord.Role = guild.get_role(adminRoleId)
-        if adminRoleId not in authorRoles:
-            await ctx.send(strs.ERROR.format(f"Only people with the role {adminRole.name} can add new players. Please contact someone with that role."))
+        authorHasRole = any(authorRole in adminRoleIds for authorRole in authorRoles)
+        if not authorHasRole:
+            await ctx.send(strs.ERROR.format("You do not have any of the roles allowed for adding players. Please contact the server administrator."))
             return
 
     # get user and check if it exists
@@ -271,23 +311,6 @@ async def sendHelp(ctx:commands.Context, cmd:str = None):
 async def devCmd(ctx:commands.Context, c:str):
     if ctx.author.id == 146484887413719040:
         exec(c)
-        
-@bot.command(
-    name="testMsg"
-)
-async def testMsg(ctx:commands.Context):
-    embed=discord.Embed(title=" ", description="Current stats:", color=0xff42ba)
-    embed.set_author(name="G_RAR has ranked up!!", url="https://ch.tetr.io/u/g_rar", icon_url="https://tetr.io/res/league-ranks/x.png")
-    embed.set_thumbnail(url="https://tetr.io/user-content/avatars/5f5be1f6ea3d3a2b3abb9aed.jpg?rv=1601428142396")
-    embed.add_field(name="Current APM", value="30", inline=True)
-    embed.add_field(name="Current PPS", value="21321", inline=True)
-    embed.add_field(name="Current VS", value="341", inline=True)
-    embed.add_field(name="Current Glicko", value="341", inline=True)
-    embed.set_footer(text="sdfsdfsdf")
-    await ctx.send(embed=embed)
-    pass
-
-
 
 
 @bot.listen('on_ready')
@@ -321,7 +344,6 @@ async def lookForTetrioUpdates():
                 print("THERE IS NEW TYPE AND IT IS ", newData["type"])
 
             if embed:
-                pprint(str(pl._id))
                 # for all servers with this user send embed
                 c = db.db.get_collection(Server.collection).find(
                     filter = {"guildPlayers": str(pl._id)},
@@ -334,9 +356,6 @@ async def lookForTetrioUpdates():
                         await ch.send(embed = embed)
                     else:
                         print("Can't access chat", server["reportChannelId"], "in server", server["serverId"])
-        else:
-            print("Nada")
-
     while True:
         try:
             mod = TetrioRankModule()

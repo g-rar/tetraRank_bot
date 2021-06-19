@@ -11,7 +11,7 @@ class Server(BaseModel):
     serverId: int
     reportChannelId: int
     guildPlayers: list = field(default_factory=list)
-    adminRole: int = None
+    adminRoles: list = field(default_factory=list)
     collection: str = "SERVER"
 
     @staticmethod
