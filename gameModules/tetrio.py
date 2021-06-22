@@ -137,7 +137,11 @@ class TetrioRankModule(BaseModule):
     def _fillEmbedPBBlitz(self, pl: TetrioPlayer, oldPl:TetrioPlayer, record:dict, embed: Embed):
         oldRecord = oldPl.records.blitz
         finalscore = record['record']['endcontext']['score']
-        oldFinalScore = oldRecord['record']['endcontext']['score']
+        oldFinalScore = None
+        if oldRecord["record"]:
+            oldFinalScore = oldRecord['record']['endcontext']['score']
+        else:
+            oldFinalScore = 0
         embed.add_field(name="Final score: ", value=f"\t__**{finalscore} pts**__ ")
         embed.add_field(name="Previous score: ", value=f"\t**{oldFinalScore} pts**")
         embed.add_field(name="Improvement: ", value=f"\t**{ finalscore - oldFinalScore } pts**")
