@@ -7,6 +7,7 @@ from bd import PyDB
 from pprint import pprint
 from discord import Embed
 from datetime import datetime
+import math
 import os
 
 class TetrioRankModule(BaseModule):
@@ -79,12 +80,15 @@ class TetrioRankModule(BaseModule):
         embed = Embed(colour=0x6eae18, url=f"https://ch.tetr.io/u/{pl.info.username}", 
             timestamp= datetime.fromisoformat(data["ts"][:-1]))
         embed.set_thumbnail(url=f"https://tetr.io/user-content/avatars/{pl.info._id}.jpg?rv={pl.info.avatar_revision}")
+        oldDate = None
         if mode == "40L":
-            oldDate = datetime.fromisoformat(oldPl.records.sprintTimeStamp[:-1])
+            if oldPl.records.sprintTimeStamp:
+                oldDate = datetime.fromisoformat(oldPl.records.sprintTimeStamp[:-1])
             record = record["data"]["records"]["40l"]
             self._fillEmbedPBSprint(pl, oldPl, record, embed)
         if mode == "BLITZ":
-            oldDate = datetime.fromisoformat(oldPl.records.blitzTimeStamp[:-1])
+            if oldPl.records.blitzTimeStamp:
+                oldDate = datetime.fromisoformat(oldPl.records.blitzTimeStamp[:-1])
             record = record["data"]["records"]["blitz"]
             self._fillEmbedPBBlitz(pl, oldPl, record, embed)
         embed.set_author(
@@ -92,16 +96,21 @@ class TetrioRankModule(BaseModule):
             url=f"https://tetr.io/#r:{record['record']['replayid']}", 
             icon_url="https://tetr.io/res/badges/improvement-local.png")
         
-        daysAgo = newDate - oldDate
+        lastRecordStr = "This is their first ever record."
+        if oldDate:
+            lastRecordStr = f"The last record was set {(newDate - oldDate).days} days ago."
 
-        embed.description = f"The last record was set {daysAgo.days} days ago. These are the statistics of the new record:"
+        embed.description = f"{lastRecordStr} These are the statistics of the new record:"
         embed.set_footer(text="Tetra Rank Bot")
         return embed
 
     def _fillEmbedPBSprint(self, pl: TetrioPlayer, oldPl:TetrioPlayer, record:dict, embed: Embed):
         oldRecord = oldPl.records.sprint
         finaltime = round(record['record']['endcontext']['finalTime']/1000, 3)
-        oldFinalTime = round(oldRecord['record']['endcontext']['finalTime']/1000, 3)
+        if oldRecord["record"]:
+            oldFinalTime = round(oldRecord['record']['endcontext']['finalTime']/1000, 3)
+        else:
+            oldFinalTime = math.inf
         # pieces = record['record']['endcontext']['piecesplaced']
         # inputs = record['record']['endcontext']['inputs']
         # finesse = record['record']['endcontext']['finesse']
@@ -117,8 +126,8 @@ class TetrioRankModule(BaseModule):
         # oldPps = round(oldPieces / oldFinalTime, 2)
         # oldKps = round(oldInputs / oldFinalTime, 2)
         embed.add_field(name="Final time: ", value=f"\t__**{finaltime} sec**__ ")
-        embed.add_field(name="Previous time: ", value=f"\t**{oldFinalTime} sec**")
-        embed.add_field(name="Improvement: ", value=f"\t**{round(oldFinalTime - finaltime,3)} sec**")
+        embed.add_field(name="Previous time: ", value=f"\t**{oldFinalTime} sec**".replace("inf","∞"))
+        embed.add_field(name="Improvement: ", value=f"\t**{round(oldFinalTime - finaltime,3)} sec**".replace("inf","∞"))
         # embed.add_field(name="pps:", value=f"\t**{pps}** (+0.7)", inline=True)
         # embed.add_field(name="kpp:", value=f"\t**{kpp}** (-0.2)", inline=True)
         # embed.add_field(name="kps:", value=f"\t**{kps}** (+0.5)", inline=True)
