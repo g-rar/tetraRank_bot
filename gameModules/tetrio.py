@@ -107,8 +107,8 @@ class TetrioRankModule(BaseModule):
     def _fillEmbedPBSprint(self, pl: TetrioPlayer, oldPl:TetrioPlayer, record:dict, embed: Embed):
         oldRecord = oldPl.records.sprint
         finaltime = round(record['record']['endcontext']['finalTime']/1000, 3)
-        if oldRecord["record"]:
-            oldFinalTime = round(oldRecord['record']['endcontext']['finalTime']/1000, 3)
+        if oldRecord:
+            oldFinalTime = round(oldRecord['endcontext']['finalTime']/1000, 3)
         else:
             oldFinalTime = math.inf
         # pieces = record['record']['endcontext']['piecesplaced']
@@ -138,8 +138,8 @@ class TetrioRankModule(BaseModule):
         oldRecord = oldPl.records.blitz
         finalscore = record['record']['endcontext']['score']
         oldFinalScore = None
-        if oldRecord["record"]:
-            oldFinalScore = oldRecord['record']['endcontext']['score']
+        if oldRecord:
+            oldFinalScore = oldRecord['endcontext']['score']
         else:
             oldFinalScore = 0
         embed.add_field(name="Final score: ", value=f"\t__**{finalscore} pts**__ ")
