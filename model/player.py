@@ -31,20 +31,19 @@ class TetrioPlayerRecords(BaseModel):
 
     @staticmethod
     def fromDict(d):
-        spr = d.get("40l", None)
-        bltz = d.get("blitz",None)
+        spr = d.get("40l", {}).get("record", None)
+        bltz = d.get("blitz", {}).get("record",None)
         ins = TetrioPlayerRecords(spr,bltz)
         if spr:
-            ins.sprintID = spr["record"]["_id"]
-            ins.sprintReplayID = spr["record"]["replayid"]
-            ins.sprintTime = spr["record"]["endcontext"]["finalTime"]
-            ins.sprintTimeStamp = spr["record"]["ts"]
+            ins.sprintID = spr["_id"]
+            ins.sprintReplayID = spr["replayid"]
+            ins.sprintTime = spr["endcontext"]["finalTime"]
+            ins.sprintTimeStamp = spr["ts"]
         if bltz:
-            ins.blitzID = bltz["record"]["_id"]
-            ins.blitzReplayID = bltz["record"]["replayid"]
-            ins.blitzScore = bltz["record"]["endcontext"]["score"]
-            ins.blitzTimeStamp = bltz["record"]["ts"]
-
+            ins.blitzID = bltz["_id"]
+            ins.blitzReplayID = bltz["replayid"]
+            ins.blitzScore = bltz["endcontext"]["score"]
+            ins.blitzTimeStamp = bltz["ts"]
         return ins        
 
 
