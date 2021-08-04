@@ -3,7 +3,6 @@ from discord.ext import commands
 from discord.ext.commands import Bot, Context
 from discord import Message, Guild, TextChannel
 from discord_components import DiscordComponents, Button, ButtonStyle, InteractionType
-import DiscordUtils
 
 import asyncio
 
