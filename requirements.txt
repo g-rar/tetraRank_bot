@@ -1,4 +1,4 @@
 pandas
 discord
-DiscordUtils
+discord_components
 dotenv
