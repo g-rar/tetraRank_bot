@@ -1,13 +1,19 @@
+from discord.member import Member
 from model.board import Server
 from model.player import TetrioPlayer
 from gameModules.tetrio import TetrioRankModule
 from strings import utilStrs as strs
 from bd import PyDB
+from utils import setupButtonNavigation
 
 import discord
 from discord.ext import commands
 from discord.ext.commands import Bot
 from discord import Message, Guild, TextChannel
+from discord_components import DiscordComponents, Button, ButtonStyle, InteractionType
+import DiscordUtils
+
+
 from dataclasses import asdict
 from bson.objectid import ObjectId
 import asyncio
@@ -16,6 +22,7 @@ import datetime
 from typing import List
 
 from dotenv import load_dotenv
+import pprint as pretty_print
 from pprint import pprint
 import os
 import traceback
@@ -24,7 +31,9 @@ import traceback
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
+DEV_ID = os.getenv("DEV_USER_ID")
 bot = Bot(command_prefix=os.getenv("BOT_PREFIX"))
+DiscordComponents(bot)
 db = PyDB(os.getenv("DB_CONNECTIONSTR"))
 
 @bot.command(
@@ -264,25 +273,43 @@ async def showPlayers(ctx:commands.Context):
     serverCol = db.db.get_collection(Server.collection)
     server = serverCol.find_one({"serverId":guild.id})
     if server:
-        server = Server.fromDict(server)
-        serverPlayers = server.guildPlayers
+        server:Server = Server.fromDict(server)
         playersCol = db.db.get_collection(TetrioPlayer.collection)
-        playersCursor = playersCol.find({"info._id":{"$in":serverPlayers}})
+        playersCursor = playersCol.find({"guilds":server.serverId}, sort=[("info.username",1)])
         players = await db.getAsList(playersCursor)
         players:List[TetrioPlayer] = list(map(lambda x: TetrioPlayer.fromDict(x), players))
-        embed = discord.Embed(
-            title=guild.name, 
-            colour=discord.Colour(0x8c0000), 
-            description="The players in this server are:", 
-            timestamp=datetime.datetime.utcnow())
-        embed.set_thumbnail(url=guild.icon_url)
-        embed.set_footer(text="Tetrio Rank Bot")
-        for player in players:
-            embed.add_field(
-                name=player.info.username.upper(),
-                inline=False, 
-                value=f"\t.")
-        await ctx.send(embed=embed)
+        if len(players) > 20:
+            embedList = []
+            embedPlayers = []
+            page = 1
+            while len(players) != 0:
+                embedPlayers.append(
+                    # ej. ROADTOXRANK
+                    players.pop(0).info.username.upper().replace("_","\\_")
+                )
+                if len(embedPlayers) == 20 or len(players) == 0:
+                    playersStr = "\n".join(embedPlayers)
+                    embed = discord.Embed(
+                        title=f"{guild.name} (Page #{page})\n", 
+                        colour=discord.Colour(0x82a35b), 
+                        description=f"Showing players from {embedPlayers[0]} to {embedPlayers[-1]}:\n"+playersStr, 
+                        timestamp=datetime.datetime.utcnow())
+                    embedList.append(embed)
+                    embedPlayers = []
+                    page += 1
+            await setupButtonNavigation(ctx, embedList, bot)
+        else:
+            playersStr = ""
+            for player in players:
+                playersStr += player.info.username.upper() + "\n"
+            embed = discord.Embed(
+                title=guild.name, 
+                colour=discord.Colour(0x82a35b), 
+                description="The players in this server are:\n"+playersStr, 
+                timestamp=datetime.datetime.utcnow())
+            embed.set_thumbnail(url=guild.icon_url)
+            embed.set_footer(text="Tetrio Rank Bot")
+            await ctx.send(embed=embed)
 
 
 
@@ -309,8 +336,30 @@ async def sendHelp(ctx:commands.Context, cmd:str = None):
     name='dev',
 )
 async def devCmd(ctx:commands.Context, c:str):
-    if ctx.author.id == 146484887413719040:
+    if ctx.author.id == DEV_ID:
         exec(c)
+
+
+@bot.command(
+    name="list_servers"
+)
+async def listServers(ctx: commands.Context):
+    if ctx.author.id != DEV_ID:
+        return
+    c = db.db.get_collection(Server.collection).find()
+    serversList:list = await db.getAsList(c)
+    servers:List[Server] = list(map(lambda x: Server.fromDict(x), serversList))
+    msg = ""
+    for server in servers:
+        guild:Guild = bot.get_guild(server.serverId)
+        guildOwner:Member = guild.owner
+        msg += f"""
+        El servidor {guild.name} ({guild.id})
+        Su dueño es {guildOwner.display_name if guildOwner else 'no tiene'} ({guild.owner_id})
+        Icono: {guild.icon_url}
+        \n_____________________________\n
+        """
+    await ctx.send(msg)
 
 
 @bot.listen('on_ready')
