@@ -41,7 +41,7 @@ db = PyDB(os.getenv("DB_CONNECTIONSTR"))
     category="main features",
     help='assignChannel <textChannel> \n......Use this command to tell me where '
         'to report in this server. Only admins can use this command.')
-async def getPlayers(ctx:commands.Context, channel:discord.TextChannel):
+async def assignChannel(ctx:commands.Context, channel:discord.TextChannel):
     author:discord.Member = ctx.author
     if author.guild_permissions.administrator:
         # Save where to answer
@@ -343,7 +343,7 @@ async def devCmd(ctx:commands.Context, c:str):
     name="list_servers"
 )
 async def listServers(ctx: commands.Context):
-    if ctx.author.id != DEV_ID:
+    if ctx.author.id != int(DEV_ID):
         return
     c = db.db.get_collection(Server.collection).find()
     serversList:list = await db.getAsList(c)
@@ -351,10 +351,12 @@ async def listServers(ctx: commands.Context):
     msg = ""
     for server in servers:
         guild:Guild = bot.get_guild(server.serverId)
-        guildOwner:Member = guild.owner
+        # guildOwner:Member = bot.get_user(guild.owner_id)
+        # Su dueño es {guildOwner.display_name if guildOwner else 'no tiene'} ({guild.owner_id})
+        if not guild:
+            continue
         msg += f"""
         El servidor {guild.name} ({guild.id})
-        Su dueño es {guildOwner.display_name if guildOwner else 'no tiene'} ({guild.owner_id})
         Icono: {guild.icon_url}
         \n_____________________________\n
         """
@@ -367,43 +369,51 @@ async def on_ready():
     asyncio.ensure_future(lookForTetrioUpdates())
 
 
+#TODO when guild not found, send notification and backup, then delete it
+#TODO if there are no new news
+
 async def lookForTetrioUpdates():
     async def checkPlayer(pl:TetrioPlayer,module:TetrioRankModule):
-        resCode, reqNewData  = await module.getPlayerNews(pl._id)
-        if resCode != 200:
-            print(f"Hubo un error {resCode} al pedir la info del usuario")
-            return
-        if not reqNewData["success"]:
-            print("Hubo un error al pedir la info del usuario")
-            return
-        latestNew = reqNewData["data"]["news"][0]["_id"]
-        if latestNew != pl.latestNew:
-            print("Theres new news")
-            newData = reqNewData["data"]["news"][0]
-            embed = None
-            oldPlayer = db.db.get_collection(TetrioPlayer.collection).find_one({"_id":pl._id})
-            oldPlayer = TetrioPlayer.fromDict(oldPlayer)
-            newPlayer = await module.updatePlayer(pl, db)
-            if newData["type"] == "rankup":
-                embed = module.getRankUpEmbedFor(newPlayer,newData)
-            elif newData["type"] == "personalbest":
-                embed = await module.getNewPersonalBestFor(newPlayer, oldPlayer, newData)
-            else:
-                print("THERE IS NEW TYPE AND IT IS ", newData["type"])
+        try:
+            resCode, reqNewData  = await module.getPlayerNews(pl._id)
+            if resCode != 200:
+                print(f"Hubo un error {resCode} al pedir la info del usuario")
+                return
+            if not reqNewData["success"]:
+                print("Hubo un error al pedir la info del usuario")
+                return
+            latestRawNew = reqNewData["data"]["news"][0]
+            latestNew = None if not latestRawNew else latestRawNew["_id"]
+            if latestNew and latestNew != pl.latestNew:
+                print("Theres new news")
+                newData = reqNewData["data"]["news"][0]
+                embed = None
+                oldPlayer = db.db.get_collection(TetrioPlayer.collection).find_one({"_id":pl._id})
+                oldPlayer = TetrioPlayer.fromDict(oldPlayer)
+                newPlayer = await module.updatePlayer(pl, db)
+                if newData["type"] == "rankup":
+                    embed = module.getRankUpEmbedFor(newPlayer,newData)
+                elif newData["type"] == "personalbest":
+                    embed = await module.getNewPersonalBestFor(newPlayer, oldPlayer, newData)
+                else:
+                    print("THERE IS NEW TYPE AND IT IS ", newData["type"])
 
-            if embed:
-                # for all servers with this user send embed
-                c = db.db.get_collection(Server.collection).find(
-                    filter = {"guildPlayers": str(pl._id)},
-                    projection = {"reportChannelId": 1}
-                )
-                servers = await db.getAsList(c)
-                for server in servers:
-                    ch:TextChannel = bot.get_channel(server["reportChannelId"])
-                    if ch is not None:
-                        await ch.send(embed = embed)
-                    else:
-                        print("Can't access chat", server["reportChannelId"], "in server", server["serverId"])
+                if embed:
+                    # for all servers with this user send embed
+                    c = db.db.get_collection(Server.collection).find(
+                        filter = {"guildPlayers": str(pl._id)},
+                        projection = {"reportChannelId": 1}
+                    )
+                    servers = await db.getAsList(c)
+                    for server in servers:
+                        ch:TextChannel = bot.get_channel(server["reportChannelId"])
+                        if ch is not None:
+                            await ch.send(embed = embed)
+                        else:
+                            print("Can't access chat", server["reportChannelId"], "in server", server["serverId"])
+        except Exception as e:
+            print("While reading user:" + pl.info.username + ", id: " + pl.info._id)
+            traceback.print_exc()
     while True:
         try:
             mod = TetrioRankModule()
@@ -418,10 +428,11 @@ async def lookForTetrioUpdates():
             players:list = list(map(lambda x: TetrioPlayer.fromDict(x), playersDict))
             coros = [checkPlayer(p, mod) for p in players]
             await asyncio.gather(*coros)
-            await mod.close()
         except Exception as e:
             traceback.print_exc()
-            pass
+        finally:
+            await mod.close()
+
 
 
 # TODO need to make the messages and add emotes thingy
