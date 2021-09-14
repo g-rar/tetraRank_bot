@@ -382,8 +382,8 @@ async def lookForTetrioUpdates():
             if not reqNewData["success"]:
                 print("Hubo un error al pedir la info del usuario")
                 return
-            latestRawNew = reqNewData["data"]["news"][0]
-            latestNew = None if not latestRawNew else latestRawNew["_id"]
+            latestRawNew = reqNewData["data"]["news"]
+            latestNew = None if not latestRawNew else latestRawNew[0]["_id"]
             if latestNew and latestNew != pl.latestNew:
                 print("Theres new news")
                 newData = reqNewData["data"]["news"][0]
@@ -402,7 +402,7 @@ async def lookForTetrioUpdates():
                     # for all servers with this user send embed
                     c = db.db.get_collection(Server.collection).find(
                         filter = {"guildPlayers": str(pl._id)},
-                        projection = {"reportChannelId": 1}
+                        projection = {"reportChannelId": 1, "serverId": 1}
                     )
                     servers = await db.getAsList(c)
                     for server in servers:
