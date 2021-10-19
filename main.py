@@ -1,3 +1,4 @@
+from discord.ext.commands.context import Context
 from discord.member import Member
 from model.board import Server
 from model.player import TetrioPlayer
@@ -254,13 +255,56 @@ async def addPlayer_Error(ctx, error:commands.CommandError):
     elif isinstance(error, commands.MemberNotFound):
         er:commands.MemberNotFound = error
         await ctx.send(
-            f"Excuse me... I could find {er.argument} on the server, perhaps it's a role or something?\n"
+            f"Excuse me... I couldn't find {er.argument} on the server, perhaps it's a role or something?\n"
             # "I'll try to add the player anyways, you could link them afterwards if I succeed."
         )
     else:
         print(error)
         await ctx.send(strs.ERROR.format("There was an unexpected error."))
         raise error
+
+@bot.command(
+    name="removePlayer",
+    help='removePlayer <tetr.io username> '
+        # '[<discord mention>]'
+        '\n......Stop reporting activity of this player '
+        'in this server.', #Optionally, you can @somenone to tag them on their activity.',
+    aliases=['rmplayer', 'removeplayer', 'deletePlayer', 'deleteplayer','delplayer']
+)
+async def removePlayer(ctx: Context, tName:str):
+    #check roles
+    guild:discord.Guild = ctx.guild
+    guildId = guild.id
+    dbRes = db.db.get_collection(Server.collection).find_one({"serverId":guildId})
+    adminRoleIds = dbRes.get("adminRoles",[])
+    if len(adminRoleIds) != 0:
+        author:discord.Member = ctx.author
+        authorRoles = list(map(lambda x: x.id, author.roles))
+        authorHasRole = any(authorRole in adminRoleIds for authorRole in authorRoles)
+        if not authorHasRole:
+            await ctx.send(strs.ERROR.format("You do not have any of the roles allowed for removing players. Please contact the server administrator."))
+            return
+
+    playerName = tName.lower()
+    playersCollection = db.db.get_collection(TetrioPlayer.collection)
+    dbPlayer = playersCollection.find_one({"info.username":playerName})
+    player:TetrioPlayer = TetrioPlayer.fromDict(dbPlayer)
+    if dbPlayer is None or ctx.guild.id not in dbPlayer.get('guilds', []):
+        await ctx.send(f"The player '{playerName}' is not registered on the server already 🤷‍♂️")
+        return
+    playerGuilds:list = dbPlayer['guilds']
+    playerGuilds.remove(ctx.guild.id)
+    serverCollection = db.db.get_collection(Server.collection)
+    rawServer = serverCollection.find_one({"serverId":ctx.guild.id})
+    server:Server = Server.fromDict(rawServer)
+    server.guildPlayers.remove(str(player._id))
+
+    if len(playerGuilds) is 0:
+        playersCollection.find_one_and_delete({"info.username":playerName})
+    else:
+        playersCollection.find_one_and_update({"info.username":playerName}, {"$set":{"guilds":playerGuilds}})
+    serverCollection.find_one_and_update({"serverId":server.serverId},{"$set":{"guildPlayers":server.guildPlayers}})
+    await ctx.send(f"The player '{playerName}' has been removed from the server's player list.")
 
 @bot.command(
     name="showPlayers",
