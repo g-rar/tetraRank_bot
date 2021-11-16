@@ -299,7 +299,7 @@ async def removePlayer(ctx: Context, tName:str):
     server:Server = Server.fromDict(rawServer)
     server.guildPlayers.remove(str(player._id))
 
-    if len(playerGuilds) is 0:
+    if len(playerGuilds) == 0:
         playersCollection.find_one_and_delete({"info.username":playerName})
     else:
         playersCollection.find_one_and_update({"info.username":playerName}, {"$set":{"guilds":playerGuilds}})
@@ -416,7 +416,12 @@ async def on_ready():
 #TODO when guild not found, send notification and backup, then delete it
 #TODO if there are no new news
 
+lookingForUpdates = False
 async def lookForTetrioUpdates():
+    global lookingForUpdates
+    if lookingForUpdates:
+        return
+    lookingForUpdates = True
     async def checkPlayer(pl:TetrioPlayer,module:TetrioRankModule):
         try:
             resCode, reqNewData  = await module.getPlayerNews(pl._id)
