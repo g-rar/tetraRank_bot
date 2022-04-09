@@ -36,7 +36,7 @@ class TetrioRankModule(BaseModule):
     async def getPlayerNews(self, id:str):
         return await self._BaseModule__getJson(self.api + f"news/user_{id}")
             
-
+    #TODO find a way to keep data clean. once a player is deleted, will keep login until dawn of time
     async def updatePlayer(self, pl:TetrioPlayer, db:PyDB):
         
         newsCode, newNews = await self._BaseModule__getJson(self.api + f"news/user_{str(pl._id)}")

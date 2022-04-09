@@ -6,10 +6,10 @@ class TetrioLeague(BaseModel):
     rank:str
     prev_rank:str
     next_rank:str
-    apm:float
-    pps:float
-    vs:float
     rating:float
+    apm:float = None
+    pps:float = None
+    vs:float = None
 
     @staticmethod
     def fromDict(d):

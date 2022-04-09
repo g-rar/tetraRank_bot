@@ -474,7 +474,16 @@ async def lookForTetrioUpdates():
                 await asyncio.sleep(10*60)
             c = db.db.get_collection(TetrioPlayer.collection).find()
             playersDict:list = await db.getAsList(c)
-            players:list = list(map(lambda x: TetrioPlayer.fromDict(x), playersDict))
+            players:list = []
+            problematics = []
+            for p in playersDict:
+                try:
+                    players.append(TetrioPlayer.fromDict(p))
+                except:
+                    if p.get('info',{}).get('_id') in problematics:
+                        print("Problem player: ", p)
+                        problematics.append(p.get('info',{}).get('_id'))
+            # list(map(lambda x: TetrioPlayer.fromDict(x), playersDict))
             coros = [checkPlayer(p, mod) for p in players]
             await asyncio.gather(*coros)
         except Exception as e:
